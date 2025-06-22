@@ -124,3 +124,54 @@ fields @timestamp
 ------------------------------------------------------------------------------------------------------------------
 
 
+------------------------------------------------------------------------------------------------------------------
+-- Query 10
+-- Discover Attributes Set in First 2 Seconds of Contact
+------------------------------------------------------------------------------------------------------------------
+fields @timestamp, ContactId, ContactFlowModuleType, Parameters.Key
+| filter ContactFlowModuleType in ["SetLoggingBehavior", "SetAttributes"]
+| stats min(if(ContactFlowModuleType = "SetLoggingBehavior", @timestamp, null)) as firstLoggingTime, collect_list(if(ContactFlowModuleType = "SetAttributes" and @timestamp <= firstLoggingTime + 2000, Parameters.Key, null)) as attributeKeys by ContactId
+| filter ispresent(firstLoggingTime)
+| filter array_length(attributeKeys) > 0
+| parse @timestamp "%Y-%m-%dT%H:%M:%S.%fZ" as parsedTimestamp
+| fields ContactId, firstLoggingTime, array_join(filter(attributeKeys, x -> x is not null), ", ") as attributeKeysList
+| sort ContactId asc
+| limit 1000
+------------------------------------------------------------------------------------------------------------------
+
+-- 1. Field Selection
+fields @timestamp, ContactId, ContactFlowModuleType, Parameters.Key
+-- Selects the timestamp, contact ID, module type, and attribute key (for SetAttributes events).
+-- Parameters.Key is null for SetLoggingBehavior events but included for later filtering.
+
+-- 2. Filter Relevant Module Types
+| filter ContactFlowModuleType in ["SetLoggingBehavior", "SetAttributes"]
+-- Limits the dataset to log entries for SetLoggingBehavior
+-- (to find the first logging event) and SetAttributes (to get attribute keys).
+
+-- 3. Aggregation by ContactId
+| stats min(if(ContactFlowModuleType = "SetLoggingBehavior", @timestamp, null)) as firstLoggingTime,
+        collect_list(if(ContactFlowModuleType = "SetAttributes" and @timestamp <= firstLoggingTime + 2000, Parameters.Key, null)) as attributeKeys
+  by ContactId
+-- min(if(...)): For each ContactId, finds the earliest @timestamp where ContactFlowModuleType = "SetLoggingBehavior", storing it as firstLoggingTime.
+-- collect_list(if(...)): Collects all Parameters.Key values from SetAttributes events where the timestamp is within 2 seconds (2000 milliseconds) of firstLoggingTime. Non-matching entries are set to null.
+-- by ContactId: Groups results by ContactId to process each contact independently.
+
+-- Filter Valid Results
+| filter ispresent(firstLoggingTime)
+| filter array_length(attributeKeys) > 0
+-- Ensures only ContactId values with a SetLoggingBehavior event are included.
+-- Excludes cases where no SetAttributes events occur within 2 seconds (i.e., the attributeKeys array is empty or contains only null).
+
+-- Format Output:
+| parse @timestamp "%Y-%m-%dT%H:%M:%S.%fZ" as parsedTimestamp
+| fields ContactId, firstLoggingTime, array_join(filter(attributeKeys, x -> x is not null), ", ") as attributeKeysList
+-- Parses @timestamp for clarity (though not strictly necessary since we’re using firstLoggingTime directly).
+-- Uses array_join and filter to convert the attributeKeys array into a comma-separated string, excluding null values.
+-- Outputs ContactId, firstLoggingTime, and the list of attribute keys.
+
+-- Sort and Limit
+| sort ContactId asc
+| limit 1000
+-- Sorts by ContactId for readability.
+-- Limits output to 1000 rows to manage large datasets (adjust as needed).
