@@ -144,32 +144,31 @@ fields @timestamp, ContactId, ContactFlowModuleType, Parameters.Key
 
 -- 2. Filter Relevant Module Types
 | filter ContactFlowModuleType in ["SetLoggingBehavior", "SetAttributes"]
--- Limits the dataset to log entries for SetLoggingBehavior
--- (to find the first logging event) and SetAttributes (to get attribute keys).
+-- Purpose: Restricts the dataset to log entries where ContactFlowModuleType is exactly "SetAttributes".
 
--- 3. Aggregation by ContactId
-| stats min(if(ContactFlowModuleType = "SetLoggingBehavior", @timestamp, null)) as firstLoggingTime,
-        collect_list(if(ContactFlowModuleType = "SetAttributes" and @timestamp <= firstLoggingTime + 2000, Parameters.Key, null)) as attributeKeys
-  by ContactId
--- min(if(...)): For each ContactId, finds the earliest @timestamp where ContactFlowModuleType = "SetLoggingBehavior", storing it as firstLoggingTime.
--- collect_list(if(...)): Collects all Parameters.Key values from SetAttributes events where the timestamp is within 2 seconds (2000 milliseconds) of firstLoggingTime. Non-matching entries are set to null.
--- by ContactId: Groups results by ContactId to process each contact independently.
+-- 3. Count contact id with each unique attribute
+| stats count() as attrCount by ContactId, Parameters.Key
+-- Purpose: Aggregates the filtered data by grouping it by ContactId and Parameters.Key, counting how many times each combination occurs.
+-- Details:
+-- count(): Counts the number of log entries for each unique ContactId and Parameters.Key pair.
+-- as attrCount: Names the count column attrCount for clarity.
+-- by ContactId, Parameters.Key: Groups the results so each row represents a unique combination of ContactId and attribute key, with the count of how often that key was set for that contact.
+-- Example:
+-- If ContactId = abc123 has two SetAttributes events, one setting Parameters.Key = customerType and another setting Parameters.Key = greetingPlayed, the output would include:
+-- ContactId = abc123, Parameters.Key = customerType, attrCount = 1
+-- ContactId = abc123, Parameters.Key = greetingPlayed, attrCount = 1
+-- If customerType was set twice for abc123, you’d see attrCount = 2 for that key.
+-- Why This Matters: This line summarizes how frequently each attribute key is set per contact, preparing the data for further filtering and output.
 
--- Filter Valid Results
-| filter ispresent(firstLoggingTime)
-| filter array_length(attributeKeys) > 0
--- Ensures only ContactId values with a SetLoggingBehavior event are included.
--- Excludes cases where no SetAttributes events occur within 2 seconds (i.e., the attributeKeys array is empty or contains only null).
 
--- Format Output:
-| parse @timestamp "%Y-%m-%dT%H:%M:%S.%fZ" as parsedTimestamp
-| fields ContactId, firstLoggingTime, array_join(filter(attributeKeys, x -> x is not null), ", ") as attributeKeysList
--- Parses @timestamp for clarity (though not strictly necessary since we’re using firstLoggingTime directly).
--- Uses array_join and filter to convert the attributeKeys array into a comma-separated string, excluding null values.
--- Outputs ContactId, firstLoggingTime, and the list of attribute keys.
+-- 4.
+| filter attrCount > 0
+-- Purpose: Excludes rows where the count (attrCount) is zero, ensuring only valid attribute keys are included.
+
+-- 5.
+| fields ContactId, Parameters.Key
+-- Purpose: Selects only the ContactId and Parameters.Key fields for the final output, discarding other fields like attrCount.
 
 -- Sort and Limit
 | sort ContactId asc
 | limit 1000
--- Sorts by ContactId for readability.
--- Limits output to 1000 rows to manage large datasets (adjust as needed).
