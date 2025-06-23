@@ -126,49 +126,13 @@ fields @timestamp
 
 ------------------------------------------------------------------------------------------------------------------
 -- Query 10
--- Discover Attributes Set in First 2 Seconds of Contact
+-- TimeStamp order of attribtues
 ------------------------------------------------------------------------------------------------------------------
 fields @timestamp, ContactId, ContactFlowModuleType, Parameters.Key
 | filter ContactFlowModuleType = "SetAttributes"
-| stats count() as attrCount by ContactId, Parameters.Key
-| filter attrCount > 0
-| fields ContactId, Parameters.Key
-| sort ContactId asc
-| limit 1000
+| sort ContactId, @timestamp asc
+| limit 200
 ------------------------------------------------------------------------------------------------------------------
-
--- 1. Field Selection
-fields @timestamp, ContactId, ContactFlowModuleType, Parameters.Key
--- Selects the timestamp, contact ID, module type, and attribute key (for SetAttributes events).
--- Parameters.Key is null for SetLoggingBehavior events but included for later filtering.
-
--- 2. Filter Relevant Module Types
-| filter ContactFlowModuleType in ["SetLoggingBehavior", "SetAttributes"]
--- Purpose: Restricts the dataset to log entries where ContactFlowModuleType is exactly "SetAttributes".
-
--- 3. Count contact id with each unique attribute
-| stats count() as attrCount by ContactId, Parameters.Key
--- Purpose: Aggregates the filtered data by grouping it by ContactId and Parameters.Key, counting how many times each combination occurs.
--- Details:
--- count(): Counts the number of log entries for each unique ContactId and Parameters.Key pair.
--- as attrCount: Names the count column attrCount for clarity.
--- by ContactId, Parameters.Key: Groups the results so each row represents a unique combination of ContactId and attribute key, with the count of how often that key was set for that contact.
--- Example:
--- If ContactId = abc123 has two SetAttributes events, one setting Parameters.Key = customerType and another setting Parameters.Key = greetingPlayed, the output would include:
--- ContactId = abc123, Parameters.Key = customerType, attrCount = 1
--- ContactId = abc123, Parameters.Key = greetingPlayed, attrCount = 1
--- If customerType was set twice for abc123, you’d see attrCount = 2 for that key.
--- Why This Matters: This line summarizes how frequently each attribute key is set per contact, preparing the data for further filtering and output.
-
-
--- 4.
-| filter attrCount > 0
--- Purpose: Excludes rows where the count (attrCount) is zero, ensuring only valid attribute keys are included.
-
--- 5.
-| fields ContactId, Parameters.Key
--- Purpose: Selects only the ContactId and Parameters.Key fields for the final output, discarding other fields like attrCount.
-
--- Sort and Limit
-| sort ContactId asc
-| limit 1000
+-- This will show us the chronological order of attributes setting for each contact.
+-- Once we see this data, we need to identify which attributes fall in the 1000-2000ms window after each contact's first timestamp.
+-- The First timestamp starts at 0 ms theoretically. So add 500 ms, 1000 ms, or 2000 ms, to see which attributes fall under initial X ms.
