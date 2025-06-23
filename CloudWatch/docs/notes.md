@@ -11,6 +11,8 @@
     - Attributes from Lex or Lambda may use specific JSONPath references (e.g., $.Lex.IntentName, $.External.AttributeKey).
 - Limitations:
     - Flow attributes (temporary, flow-scoped) appear in CloudWatch logs if logging is enabled but aren’t persisted in contact records or accessible via APIs.
+- Key words not supported:
+  - join
 
 
 When a contact flow uses the Set contact attributes block, it generates log entries in CloudWatch that follow a specific JSON structure.

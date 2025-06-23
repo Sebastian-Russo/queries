@@ -130,11 +130,13 @@ fields @timestamp
 ------------------------------------------------------------------------------------------------------------------
 fields @timestamp, ContactId, ContactFlowModuleType, Parameters.Key
 | filter ContactFlowModuleType in ["SetLoggingBehavior", "SetAttributes"]
-| stats min(if(ContactFlowModuleType = "SetLoggingBehavior", @timestamp, null)) as firstLoggingTime, collect_list(if(ContactFlowModuleType = "SetAttributes" and @timestamp <= firstLoggingTime + 2000, Parameters.Key, null)) as attributeKeys by ContactId
+| stats min(if(ContactFlowModuleType = "SetLoggingBehavior", @timestamp, null)) as firstLoggingTime,
+        earliest(if(ContactFlowModuleType = "SetAttributes" and @timestamp <= firstLoggingTime + 2000, Parameters.Key, null)) as firstAttrKey,
+        latest(if(ContactFlowModuleType = "SetAttributes" and @timestamp <= firstLoggingTime + 2000, Parameters.Key, null)) as lastAttrKey
+  by ContactId
 | filter ispresent(firstLoggingTime)
-| filter array_length(attributeKeys) > 0
-| parse @timestamp "%Y-%m-%dT%H:%M:%S.%fZ" as parsedTimestamp
-| fields ContactId, firstLoggingTime, array_join(filter(attributeKeys, x -> x is not null), ", ") as attributeKeysList
+| filter ispresent(firstAttrKey) or ispresent(lastAttrKey)
+| fields ContactId, firstLoggingTime, firstAttrKey, lastAttrKey
 | sort ContactId asc
 | limit 1000
 ------------------------------------------------------------------------------------------------------------------
