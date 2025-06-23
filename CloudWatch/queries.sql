@@ -129,15 +129,12 @@ fields @timestamp
 -- Discover Attributes Set in First 2 Seconds of Contact
 ------------------------------------------------------------------------------------------------------------------
 fields @timestamp, ContactId, ContactFlowModuleType, Parameters.Key
-| filter ContactFlowModuleType in ["SetLoggingBehavior", "SetAttributes"]
-| stats min(if(ContactFlowModuleType = "SetLoggingBehavior", @timestamp, null)) as firstLoggingTime,
-        count(if(ContactFlowModuleType = "SetAttributes" and @timestamp <= firstLoggingTime + 2000 and ispresent(Parameters.Key), 1, 0)) as attrCount
-  by ContactId, Parameters.Key
-| filter ispresent(firstLoggingTime)
+| filter ContactFlowModuleType = "SetAttributes"
+| stats count() as attrCount by ContactId, Parameters.Key
 | filter attrCount > 0
-| fields ContactId, firstLoggingTime, Parameters.Key
-| sort ContactId asc, firstLoggingTime asc
-| limit 2000
+| fields ContactId, Parameters.Key
+| sort ContactId asc
+| limit 1000
 ------------------------------------------------------------------------------------------------------------------
 
 -- 1. Field Selection
